@@ -521,6 +521,10 @@ fn checked_directory(path: &Path, create: bool) -> io::Result<bool> {
         Err(error) => return Err(error),
     };
     if !metadata.is_dir() || metadata.uid() != unsafe { libc::getuid() } {
+        // Invalid storage on one volume must not prevent discovering other trash.
+        if !create {
+            return Ok(false);
+        }
         return Err(io::Error::other(format!(
             "trash directory {path:?} must be a real directory owned by the current user"
         )));
@@ -942,6 +946,52 @@ mod tests {
     };
 
     use super::{canonicalize_path_or_parents, decode_uri_path};
+
+    #[test]
+    fn discovery_skips_invalid_per_filesystem_trash_and_finds_valid_alternatives() {
+        let uid = unsafe { libc::getuid() };
+        for shared_is_invalid in [false, true] {
+            for kind in ["file", "symlink", "dangling_symlink"] {
+                let mount = tempfile::tempdir().unwrap();
+                let shared = mount.path().join(".Trash");
+                std::fs::create_dir(&shared).unwrap();
+                std::fs::set_permissions(&shared, std::fs::Permissions::from_mode(0o1700)).unwrap();
+                let shared_root = shared.join(uid.to_string());
+                let private_root = mount.path().join(format!(".Trash-{uid}"));
+                let (invalid, valid) =
+                    if shared_is_invalid { (&shared_root, &private_root) } else { (&private_root, &shared_root) };
+                let target = mount.path().join("symlink-target");
+                match kind {
+                    "file" => std::fs::write(invalid, b"not a directory").unwrap(),
+                    "symlink" => {
+                        std::fs::create_dir(&target).unwrap();
+                        unix::fs::symlink(&target, invalid).unwrap();
+                    }
+                    _ => unix::fs::symlink(&target, invalid).unwrap(),
+                }
+
+                let mut discovered = Vec::new();
+                super::execute_on_mounted_trash_folders(uid, mount.path(), false, false, |path| {
+                    discovered.push(path);
+                    Ok(())
+                })
+                .unwrap();
+                assert!(discovered.is_empty(), "discovery accepted {invalid:?} ({kind})");
+
+                // Deletion must still reject invalid storage, without replacing it.
+                assert!(super::checked_directory(invalid, true).is_err());
+                assert!(invalid.symlink_metadata().is_ok());
+
+                std::fs::create_dir(valid).unwrap();
+                super::execute_on_mounted_trash_folders(uid, mount.path(), false, false, |path| {
+                    discovered.push(path);
+                    Ok(())
+                })
+                .unwrap();
+                assert_eq!(discovered, [valid.to_path_buf()]);
+            }
+        }
+    }
 
     #[test]
     fn receipt_parsing_is_lossless_and_rejects_unsafe_or_malformed_paths() {
