@@ -4,9 +4,9 @@
 //! Furthermore on Linux and on Windows additional functions are available from the `os_limited`
 //! module.
 //!
-//! ### Potential UB on Linux and FreeBSD
+//! ### Potential UB on BSD
 //!
-//! When querying information about mount points, non-threadsafe versions of `libc::getmnt(info|ent)` are
+//! When querying information about mount points on BSD, non-threadsafe versions of `libc::getmntinfo` are
 //! used which can cause UB if another thread calls into the same function, _probably_ only if the mountpoints
 //! changed as well.
 //!
@@ -74,8 +74,16 @@ compile_error!(
     not(target_os = "android"),
     feature = "freedesktop"
 ))]
-#[path = "freedesktop.rs"]
-mod platform;
+pub mod freedesktop;
+
+#[cfg(all(
+    unix,
+    not(target_os = "macos"),
+    not(target_os = "ios"),
+    not(target_os = "android"),
+    feature = "freedesktop"
+))]
+use freedesktop as platform;
 
 #[cfg(all(
     unix,

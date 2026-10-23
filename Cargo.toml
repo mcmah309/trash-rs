@@ -24,7 +24,7 @@ coinit_apartmentthreaded = []
 coinit_multithreaded = []
 coinit_disable_ole1dde = []
 coinit_speed_over_memory = []
-freedesktop = ["dep:libc", "dep:scopeguard", "dep:urlencoding"]
+freedesktop = ["dep:libc", "dep:scopeguard", "dep:urlencoding", "dep:rustix", "dep:tempfile"]
 portal = ["dep:zbus", "dep:rustix"]
 
 [dependencies]
@@ -59,6 +59,7 @@ rustix = { version = "1.1.5", optional = true, default-features = false, feature
     "std",
     "fs"
 ] }
+tempfile = { version = "3.8.0", optional = true }
 chrono = { version = "0.4.31", optional = true, default-features = false, features = [
     "clock",
 ] }
