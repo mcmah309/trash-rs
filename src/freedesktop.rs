@@ -67,7 +67,7 @@ pub enum TrashLocation {
     Home,
 }
 
-/// FreeDesktop-specific preferences, following the macOS context extension API.
+/// FreeDesktop-specific preferences for a [`TrashContext`].
 pub trait TrashContextExtFreedesktop {
     /// Set placement for subsequent deletions on this context.
     fn set_trash_location(&mut self, location: TrashLocation);
